@@ -6,7 +6,10 @@
 <odoo>
     <record id="telegram_project" model="sync.project">
         <field name="name">Telegram Integration</field>
-        <field name="eval_context">telegram</field>
+        <field
+            name="eval_context_ids"
+            eval="[(4, ref('sync_project_context_telegram'))]"
+        />
         <field
             name="common_code"
         ><![CDATA[
@@ -39,6 +42,7 @@ def user2name(user):
     </record>
     <record id="telegram_project_param_welcome" model="sync.project.text">
         <field name="key">TELEGRAM_WELCOME_MESSAGE</field>
+        <field name="initial_value">Hello! How can I help you?</field>
         <field name="description">
             Message that is sent to a user on first bot usage
         </field>
@@ -47,6 +51,7 @@ def user2name(user):
     </record>
     <record id="telegram_project_param_prefix" model="sync.project.param">
         <field name="key">PARTNER_NAME_TEMPLATE</field>
+        <field name="initial_value">%s [Telegram]</field>
         <field name="description">
             Template for new partner name. Must have single %s
         </field>
@@ -55,6 +60,7 @@ def user2name(user):
     </record>
     <record id="record-name-prefix_project-parameter" model="sync.project.param">
         <field name="key">CHAT_RECORD_NAME_TEMPLATE</field>
+        <field name="initial_value">%s [Telegram]</field>
         <field name="description">
             Template for new record name. Must have single %s
         </field>
@@ -63,6 +69,7 @@ def user2name(user):
     </record>
     <record id="telegram_project_param_model" model="sync.project.param">
         <field name="key">CHAT_MODEL</field>
+        <field name="initial_value">crm.lead</field>
         <field name="description">
             Record of which model is created on incoming message from new telegram user
             (e.g. crm.lead, project.task,
@@ -73,7 +80,7 @@ def user2name(user):
     </record>
     <record id="telegram_project_param_mail_chat" model="sync.project.param">
         <field name="key">WEBHOOK_CHAT</field>
-        <field name="value">yes</field>
+        <field name="initial_value">yes</field>
         <field name="description">
             Set to "no" to disable redirecting telegram messages to odoo chat
         </field>
@@ -82,6 +89,7 @@ def user2name(user):
     </record>
     <record id="telegram_project_param_operator_id" model="sync.project.param">
         <field name="key">OPERATOR_IDS</field>
+        <field name="initial_value">2</field>
         <field name="description">
             Comma-separated list of user ids that will added to Discuss chat on getting
             message from new telegram user
@@ -151,11 +159,11 @@ def handle_webhook(httprequest):
         record_model = env[params.CHAT_MODEL].with_user(main_operator).create({"name": record_name, "partner_id": partner_link.odoo.id})
         record_model.set_link(model_rel, telegram_user_ref, sync_date=None, allow_many2many=False)
 
-        record_model.message_post(body="""<b><a href="/web#action=%s&active_id=mail.channel_%s">Chat with partner is created. </a></b>""" %
-        (env.ref("mail.action_discuss").id, channel.id), author_id=odoobot_id, message_type="comment", subtype_xmlid="mail.mt_comment")
+        multi_livechat.post_channel_message(channel, """<b><a href="/web#action=%s&active_id=mail.channel_%s">Chat with partner is created. </a></b>""" %
+        (env.ref("mail.action_discuss").id, channel.id))
 
-        channel.message_post(body="""<b><a href="/web#id=%s&model=%s">Record is created. </a></b>""" %
-        (record_model.id, record_model._name), author_id=odoobot_id, message_type="comment", subtype_xmlid="mail.mt_comment")
+        multi_livechat.post_channel_message(channel, """<b><a href="/web#id=%s&model=%s">Record is created. </a></b>""" %
+        (record_model.id, record_model._name))
 
     file_bin_data = []
     telegram_document = update.message.document
@@ -178,18 +186,15 @@ def handle_webhook(httprequest):
             file_bin_data = telegram.getDocumentFile(telegram_user_ref, telegram_document)
 
         elif telegram_photo or telegram_media or telegram_document:
-            channel.message_post(body="Incoming file is too big and cannot be downloaded due to Telegram API restirctions",
-            author_id=odoobot_id, message_type="comment", subtype_xmlid="mail.mt_comment")
+            multi_livechat.post_channel_message(channel, "Incoming file is too big and cannot be downloaded due to Telegram API restirctions")
             telegram.sendMessage(telegram_user_ref, "File is too big, file size must not exceed 20 MB.")
 
         if telegram_sticker:
             log("telegram_sticker: %s" % telegram_sticker, LOG_INFO)
-            channel.message_post(body=telegram_sticker.emoji, author_id=partner_link.odoo.id,
-            message_type="comment", subtype_xmlid="mail.mt_comment")
+            multi_livechat.post_channel_message(channel, telegram_sticker.emoji, author=partner_link.odoo.id)
 
 
-    channel.message_post(body=odoo_message_text, attachments=[file_bin_data], author_id=partner_link.odoo.id,
-    message_type="comment", subtype_xmlid="mail.mt_comment")
+    multi_livechat.post_channel_message(channel, odoo_message_text, attachments=[file_bin_data], author=partner_link.odoo.id)
 
 
 

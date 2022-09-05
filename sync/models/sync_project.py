@@ -1,4 +1,4 @@
-# Copyright 2020 Ivan Yelizariev <https://twitter.com/yelizariev>
+# Copyright 2020,2022 Ivan Yelizariev <https://twitter.com/yelizariev>
 # Copyright 2020-2021 Denis Mudarisov <https://github.com/trojikman>
 # Copyright 2021 Ilya Ilchenko <https://github.com/mentalko>
 # License MIT (https://opensource.org/licenses/MIT).
@@ -24,12 +24,11 @@ from odoo.tools.translate import _
 
 from odoo.addons.queue_job.exception import RetryableJobError
 
-from ..tools import url2base64
+from ..tools import url2base64, url2bin
 from .ir_logging import LOG_CRITICAL, LOG_DEBUG, LOG_ERROR, LOG_INFO, LOG_WARNING
 
 _logger = logging.getLogger(__name__)
 DEFAULT_LOG_NAME = "Log"
-EVAL_CONTEXT_PREFIX = "_eval_context_"
 
 
 def cleanup_eval_context(eval_context):
@@ -48,7 +47,12 @@ class SyncProject(models.Model):
         "Name", help="e.g. Legacy Migration or eCommerce Synchronization", required=True
     )
     active = fields.Boolean(default=False)
+    # Deprecated, please use eval_context_ids
+    # TODO: delete in v17 release
     eval_context = fields.Selection([], string="Evaluation context")
+    eval_context_ids = fields.Many2many(
+        "sync.project.context", string="Evaluation contexts"
+    )
     eval_context_description = fields.Text(compute="_compute_eval_context_description")
 
     common_code = fields.Text(
@@ -95,11 +99,15 @@ class SyncProject(models.Model):
 
     def _compute_eval_context_description(self):
         for r in self:
-            if not r.eval_context:
-                r.eval_context_description = ""
-                continue
-            method = getattr(self, EVAL_CONTEXT_PREFIX + r.eval_context)
-            r.eval_context_description = method.__doc__
+            r.eval_context_description = (
+                "\n".join(
+                    r.eval_context_ids.mapped(
+                        lambda c: "-= " + c.display_name + " =-\n\n" + c.description
+                    )
+                )
+                if r.eval_context_ids
+                else ""
+            )
 
     def _compute_network_access_readonly(self):
         for r in self:
@@ -269,6 +277,7 @@ class SyncProject(models.Model):
                 "setattr": safe_setattr,
                 "get_lang": get_lang,
                 "url2base64": url2base64,
+                "url2bin": url2bin,
                 "html2plaintext": html2plaintext,
                 "time": time,
                 "datetime": datetime,
@@ -284,15 +293,18 @@ class SyncProject(models.Model):
         reading_time = time.time() - start_time
 
         executing_custom_context = 0
-        if self.eval_context:
+        if self.eval_context_ids:
             start_time = time.time()
 
             secrets = AttrDict()
             for p in self.sudo().secret_ids:
                 secrets[p.key] = p.value
             eval_context_frozen = frozendict(eval_context)
-            method = getattr(self, EVAL_CONTEXT_PREFIX + self.eval_context)
-            eval_context = dict(**eval_context, **method(secrets, eval_context_frozen))
+            for ec in self.eval_context_ids:
+                method = ec.get_eval_context_method()
+                eval_context = dict(
+                    **eval_context, **method(secrets, eval_context_frozen)
+                )
             cleanup_eval_context(eval_context)
 
             executing_custom_context = time.time() - start_time
@@ -468,6 +480,17 @@ class SyncProjectSecret(models.Model):
     _inherit = "sync.project.param.mixin"
 
     value = fields.Char(groups="sync.sync_group_manager")
+
+    def action_show_value(self):
+        self.ensure_one()
+        return {
+            "name": _("Secret Parameter"),
+            "type": "ir.actions.act_window",
+            "view_mode": "form",
+            "res_model": "sync.project.secret",
+            "target": "new",
+            "res_id": self.id,
+        }
 
 
 # see https://stackoverflow.com/a/14620633/222675

@@ -7,7 +7,7 @@ import logging
 import xmlrpc.client as _client
 from math import sqrt
 
-from odoo import api, fields, models
+from odoo import api, models
 from odoo.exceptions import UserError
 from odoo.tools.translate import _
 
@@ -19,25 +19,18 @@ from .sync_project import AttrDict
 _logger = logging.getLogger(__name__)
 
 try:
-    # https://github.com/python-telegram-bot/python-telegram-bot
-    from telegram import Bot, Update  # pylint: disable=missing-manifest-dependency
+    # https://github.com/eternnoir/pyTelegramBotAPI
+    import telebot  # pylint: disable=missing-manifest-dependency
 except (ImportError, IOError) as err:
     _logger.debug(err)
 
 
 class SyncProjectDemo(models.Model):
 
-    _inherit = "sync.project"
-    eval_context = fields.Selection(
-        selection_add=[
-            ("odoo2odoo", "Odoo2odoo"),
-            ("telegram_demo", "Telegram (Demo)"),
-            ("trello_github", "Trello & Github"),
-        ]
-    )
+    _inherit = "sync.project.context"
 
     @api.model
-    def _eval_context_odoo2odoo(self, secrets, eval_context):
+    def _eval_context_odoo2odoo_demo(self, secrets, eval_context):
         """
         Additional functions to access external Odoo:
 
@@ -89,12 +82,10 @@ class SyncProjectDemo(models.Model):
         """
         from lxml.html.clean import Cleaner
 
-        from odoo.tools import html2plaintext
-
         log_transmission = eval_context["log_transmission"]
 
         if secrets.TELEGRAM_BOT_TOKEN:
-            bot = Bot(token=secrets.TELEGRAM_BOT_TOKEN)
+            bot = telebot.TeleBot(token=secrets.TELEGRAM_BOT_TOKEN)
         else:
             raise Exception("Telegram bot token is not set")
 
@@ -102,14 +93,14 @@ class SyncProjectDemo(models.Model):
             log_transmission(
                 "Message to %s@telegram" % chat_id, json.dumps([args, kwargs])
             )
-            bot.sendMessage(chat_id, *args, **kwargs)
+            bot.send_message(chat_id, *args, **kwargs)
 
         def setWebhook(*args, **kwargs):
             log_transmission("Telegram->setWebhook", json.dumps([args, kwargs]))
-            bot.setWebhook(*args, **kwargs)
+            bot.set_webhook(*args, **kwargs)
 
         def parse_data(data):
-            return Update.de_json(data, bot)
+            return telebot.types.Update.de_json(data)
 
         telegram = AttrDict(
             {
@@ -121,27 +112,12 @@ class SyncProjectDemo(models.Model):
 
         return {
             "telegram": telegram,
-            "html2plaintext": html2plaintext,
             "Cleaner": Cleaner,
         }
 
     @api.model
-    def _eval_context_trello_github(self, secrets, eval_context):
-        """Adds trello and github object with set of available methods (see sync/models/sync_project_demo.py):
-        * trello
-        * github
-
-        It also adds two consts:
-
-        * GITHUB="github"
-        * TRELLO="trello"
-
-        And math function:
-
-        * sqrt
-
-        """
-        GITHUB = "github"
+    def _eval_context_trello(self, secrets, eval_context):
+        """Adds object `trello` with set of available methods (see sync/models/sync_project_demo.py). Adds string const TRELLO."""
         TRELLO = "trello"
         log_transmission = eval_context["log_transmission"]
         log = eval_context["log"]
@@ -285,7 +261,18 @@ class SyncProjectDemo(models.Model):
                 }
             )
 
-        # Github
+        return {
+            "trello": _trello(secrets),
+            "TRELLO": TRELLO,
+        }
+
+    # TODO: split into 2 or 3 separate contexts
+    @api.model
+    def _eval_context_github(self, secrets, eval_context):
+        """Adds object `github` with a set of available methods (see sync/models/sync_project_demo.py). Adds string const GITHUB."""
+        GITHUB = "github"
+        log_transmission = eval_context["log_transmission"]
+
         def _github(secrets):
             # https://pygithub.readthedocs.io/en/latest/
             from github import Github
@@ -386,8 +373,16 @@ class SyncProjectDemo(models.Model):
 
         return {
             "github": _github(secrets),
-            "trello": _trello(secrets),
             "GITHUB": GITHUB,
-            "TRELLO": TRELLO,
+        }
+
+    @api.model
+    def _eval_context_math(self, secrets, eval_context):
+        """Adds math function:
+
+        * sqrt
+
+        """
+        return {
             "sqrt": sqrt,
         }

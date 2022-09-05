@@ -1,3 +1,18 @@
+`5.0.0`
+-------
+
+- **Improvement:** switch to another python package for telegram API (pyTelegramBotAPI)
+
+`4.2.0`
+-------
+
+- **Improvement:** refactor to use common method to post messages on channel
+
+`4.1.2`
+-------
+
+- **Improvement:** handle case, where user blocked bot
+
 `4.1.1`
 -------
 

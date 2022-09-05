@@ -1,4 +1,4 @@
-# Copyright 2021 Ivan Yelizariev <https://twitter.com/yelizariev>
+# Copyright 2021-2022 Ivan Yelizariev <https://twitter.com/yelizariev>
 # License MIT (https://opensource.org/licenses/MIT).
 
 import logging
@@ -7,7 +7,7 @@ from viberbot import Api
 from viberbot.api import messages as viber_messages, viber_requests
 from viberbot.api.bot_configuration import BotConfiguration
 
-from odoo import _, api, fields, models
+from odoo import _, api, models
 from odoo.tools.safe_eval import wrap_module
 
 from odoo.addons.multi_livechat.tools import get_multi_livechat_eval_context
@@ -16,16 +16,15 @@ from odoo.addons.sync.tools import LogExternalQuery
 
 _logger = logging.getLogger(__name__)
 
+# Check README for details
+MAX_DOC_SIZE = 52_428_800
+MAX_PHOTO_SIZE = 1_048_576
+MAX_VIDEO_SIZE = 27_262_976
+
 
 class SyncProjectViber(models.Model):
 
-    _inherit = "sync.project"
-    eval_context = fields.Selection(
-        selection_add=[
-            ("viber", "Viber"),
-        ],
-        ondelete={"viber": "cascade"},
-    )
+    _inherit = "sync.project.context"
 
     @api.model
     def _eval_context_viber(self, secrets, eval_context):
@@ -46,6 +45,7 @@ class SyncProjectViber(models.Model):
 
         - multi_livechat.*
         """
+
         params = eval_context["params"]
 
         if not secrets.VIBER_BOT_TOKEN:
@@ -139,6 +139,7 @@ class SyncProjectViber(models.Model):
                     "ContactMessage",
                     "PictureMessage",
                     "VideoMessage",
+                    "FileMessage",
                     "LocationMessage",
                     "StickerMessage",
                     "RichMediaMessage",
@@ -148,4 +149,7 @@ class SyncProjectViber(models.Model):
             "viber_webhook_check": viber_webhook_check,
             "viber_webhook_parse": viber_webhook_parse,
             "multi_livechat": multi_livechat_context,
+            "MAX_DOC_SIZE": MAX_DOC_SIZE,
+            "MAX_PHOTO_SIZE": MAX_PHOTO_SIZE,
+            "MAX_VIDEO_SIZE": MAX_VIDEO_SIZE,
         }

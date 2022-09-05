@@ -145,7 +145,11 @@
                         </page>
                         <page name="code" string="Evaluation Context">
                             <group>
-                                <field name="eval_context" />
+                                <field
+                                    name="eval_context_ids"
+                                    widget="many2many_tags"
+                                    options="{'no_open': True,  'no_create_edit': True}"
+                                />
                             </group>
                             <field name="eval_context_description" />
                             <separator string="Common Code" />
@@ -212,8 +216,7 @@
                             <p class="oe_read_only">
                                 <em>
                                     Secret parameters values are available for Sync
-                                    Administrators only (click on a line to see the
-                                    value)
+                                    Administrators only
                                 </em>
                             </p>
                             <field name="secret_ids">
@@ -223,6 +226,13 @@
                                         name="value"
                                         password="True"
                                         decoration-danger="not value"
+                                    />
+                                    <button
+                                        name="action_show_value"
+                                        title="Show Value"
+                                        icon="fa-key"
+                                        type="object"
+                                        options='{"warn": true}'
                                     />
                                     <field name="description" />
                                     <field name="url" widget="url" text="Open Link" />
